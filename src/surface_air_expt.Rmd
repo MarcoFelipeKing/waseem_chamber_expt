@@ -1,0 +1,106 @@
+---
+title: "Untitled"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+pacman::p_load(dplyr,readxl,tidyr,ggplot2)
+```
+
+## GitHub Documents
+
+
+```{r read in data}
+df <- read_xlsx(path = "../data/chamber_expt_data.xlsx",sheet = 1) %>% janitor::clean_names()
+df %>% 
+  rename("position"="position_air_inlet_1_or_outlet_2","ach"="ach_3_or_6",
+         "air"="air_load_cfu_m3",
+         "surface"="surface_load_cfu_m_2_h_1") %>% 
+  mutate(position=as.factor(position),
+         ach=as.factor(ach)) %>% 
+  mutate(repeticion=rep(rep(1:12,each=5),2))->df
+```
+
+```{r investigatory plots}
+
+
+
+df %>% 
+  ggplot()+
+  geom_point(aes(x=air,y=surface,colour=position))+
+  geom_smooth(aes(x=air,y=surface,colour=position),method="lm")+
+  facet_grid(~ach,scales="free")+
+  scale_y_continuous(trans="log10")+
+  scale_x_continuous(trans="log10")+
+  ylab("Surface concentration")+
+  xlab("Airborne concentration")+
+  scale_color_brewer(palette = "Set1")+
+  hrbrthemes::theme_ipsum()+
+  theme(legend.position="")->a
+  
+
+df %>% 
+  ggplot()+
+  geom_point(aes(x=time_min,y=air,colour=position))+
+  # geom_line(aes(x=time_min,y=surface,colour=as.factor(repeticion)))
+  geom_smooth(aes(x=time_min,y=air,colour=position),method="lm")+
+  facet_grid(~ach)+
+  scale_y_continuous(trans="log10")+
+  # scale_x_continuous(trans="log10")+
+  ylab("Air concentration (cfu m3)")+
+  xlab("Time (minutes)")+
+  scale_color_brewer(palette = "Set1")+
+  hrbrthemes::theme_ipsum()+
+  theme(legend.position="") ->b
+  b
+ggpubr::ggarrange(a,b,nrow = 2)
+
+df %>% 
+  ggplot()+
+  geom_point(aes(x=time_min,y=surface,colour=position))+
+  # geom_line(aes(x=time_min,y=surface,colour=as.factor(repeticion)))
+  geom_smooth(aes(x=time_min,y=surface,colour=position),method="lm")+
+  facet_grid(~ach)+
+  scale_y_continuous(trans="log10")+
+  # scale_x_continuous(trans="log10")+
+  ylab("Surface concentration (¿¿)")+
+  xlab("Time (minutes)")+
+  scale_color_brewer(palette = "Set1")+
+  hrbrthemes::theme_ipsum()+
+  theme(legend.position="")->c
+
+ggpubr::ggarrange(b,c,nrow = 2)
+
+```
+
+
+
+
+# Model relating airborne and surface concentrations
+
+$$\dfrac{d C}{d t}=\dfrac{E}{V}-\lambda C$$
+
+where $\lambda=\lambda_i+\lambda_d+\lambda_v $, which is a combination of inactivation (which includes efficiency of sampling), deposition and removal by ventilation.
+
+Steady state $$ C=-\dfrac{E}{V\lambda}$$. Need to know E with some more certainty. 
+
+
+This has an analytical solution of the form:
+
+$$ C(t)=\dfrac{E}{V}(1-e^{-\lambda t})+ C_0 e^{-\lambda t} $$
+
+Where $C_0$ is the initial concentration of particles. So the general formulation is represented by:
+
+$$ C(t)=\dfrac{E}{V}(1-e^{-(\lambda_i+\lambda_d+\lambda_v) t})+ C_0 e^{-(\lambda_i+\lambda_d+\lambda_v) t} $$
+
+
+
+
+
+
+
+
+
+
+
