@@ -8,7 +8,14 @@ knitr::opts_chunk$set(echo = TRUE)
 pacman::p_load(dplyr,readxl,tidyr,ggplot2,deSolve)
 ```
 
-## GitHub Documents
+## Wassem Air and surface sampling experiment
+
+Currently the estimation of $E/l$ during steady state is implemented using ABC which gives a correlation.
+
+## TODO
+
+- Surface concentrations which are currently cfu/cm$^2$ per hour $\lambda_d$ (loss from deposition).
+- How long was each petri dish open?
 
 
 ```{r read in data}
@@ -21,8 +28,51 @@ df %>%
          ach=as.factor(ach)) %>% 
   mutate(repeticion=rep(rep(1:12,each=5),2))->df
 
-unique(df$time_min)
+# unique(df$time_min)
 ```
+
+## Summary data from the experiment
+
+```{r}
+df %>% 
+  group_by(ach,position,time_min) %>% 
+  summarise(M=mean(air,na.rm=TRUE),S=sd(air,na.rm=TRUE)) -> expt_data
+
+
+expt_data %>% 
+  filter(ach==3 & position==1) %>% 
+  pull(M) ->data_M_3_1
+
+expt_data %>% 
+  filter(ach==3 & position==1) %>% 
+  pull(S) ->data_S_3_1
+
+expt_data %>% 
+  filter(ach==6& position==1) %>% 
+  pull(M) ->data_M_6_1
+
+expt_data %>% 
+  filter(ach==6& position==1) %>% 
+  pull(S) ->data_S_6_1
+
+expt_data %>% 
+  filter(ach==3 & position==2) %>% 
+  pull(M) ->data_M_3_2
+
+expt_data %>% 
+  filter(ach==3 & position==2) %>% 
+  pull(S) ->data_S_3_2
+
+expt_data %>% 
+  filter(ach==6& position==2) %>% 
+  pull(M) ->data_M_6_2
+
+expt_data %>% 
+  filter(ach==6& position==2) %>% 
+  pull(S) ->data_S_6_2
+
+```
+
 
 ```{r investigatory plots}
 
@@ -58,6 +108,12 @@ df %>%
   b
 ggpubr::ggarrange(a,b,nrow = 2)
 
+
+
+```
+
+```{r}
+
 df %>% 
   ggplot()+
   geom_point(aes(x=time_min,y=surface,colour=position))+
@@ -70,11 +126,9 @@ df %>%
   xlab("Time (minutes)")+
   scale_color_brewer(palette = "Set1")+
   hrbrthemes::theme_ipsum()+
-  theme(legend.position="")->c
-
-ggpubr::ggarrange(b,c,nrow = 2)
-
+  theme(legend.position="")
 ```
+
 
 
 
@@ -162,6 +216,20 @@ return(cbind(num_at_2,num_at_4,num_at_6,num_at_16))
 }
 ```
 
+## Steady state:
+
+Steady state $$ C=-\dfrac{E}{V\lambda}$$. Need to know E with some more certainty.
+
+
+```{r}
+C_star <- function(parameters){
+  E=parameters[[1]]
+  l=parameters[[2]]
+  C=E/(32.25*l)
+  return(rep(C,5))
+}
+```
+
 # Parallel version - Non-C
 This is the parallel implementation usingg the furrrr framework with 4 worker cores
 ```{r parallel implementation with furrr}
@@ -180,14 +248,9 @@ simulate_function<-function(a){
   #set up empty distances vector
   distances<-c()
   precision=5000 #this is delta t
-  
-  #Experimental data
-  initial_contamination=c(Contamination=3828) #median 34
-  experimental_data = c(3840,3955,3765,3600)#c(11.5,5,2,0,6)#
-  s=c(287,441,544,485)
   sample_size = 200
   #parameter_sample <- c()
-  parameter_sample<- matrix(data=NA,nrow=1,ncol=2)
+  parameter_sample<- matrix(data=NA,nrow=1,ncol=5)
   total_trials=0  #Starts the counter of run trials
   accepted_trials=0 #Starts the counter for accepted trial numbers, don't change
 
@@ -198,30 +261,57 @@ while (NROW(parameter_sample) <= sample_size){
   
   # The prior distributions we use are d ~ U(0.001,10.0), C ~ U(200,1200), r ~ U(0.001,1.0), g ~ U(0.001,1.0). 
   # We begin by sampling from these distributions and simulating the process
-trial_E = runif(1,1E1,1e3)
-trial_l = runif(1,0.0,6e1)
-# trial_d = runif(1,1,2e2)
-# trial_g = runif(1,1,2e2)
-# trial_l = runif(1,1E-5,1e2)
+trial_E = runif(1,1E2,1e3)
+trial_l_3_1 = runif(1,0.1,3e1)
+trial_l_3_2 = runif(1,0.1,3e1)
+trial_l_6_1 = runif(1,0.1,3e1)
+trial_l_6_2 = runif(1,0.1,3e1)
 total_trials=total_trials+1.0
 #print(total_trials)
-parameters=c(E=trial_E,l=trial_l) # For R code
-# parameters <- c(C = trial_C, d = trial_d, g=trial_g,r=trial_r); #For C code
-one_run = deterministic_run(precision,initial_contamination,parameters)#
+parameters_3_1=c(E=trial_E,
+             l_3_1=trial_l_3_1) 
+parameters_3_2=c(E=trial_E,
+             l_3_2=trial_l_3_2) 
+parameters_6_1=c(E=trial_E,
+             l_6_1=trial_l_6_1) 
+parameters_6_2=c(E=trial_E,
+            l_6_2=trial_l_6_2)
 
-#experimental_data_noP2 = [652.0, 556.0, 424.5, 467.5, 428.0, 550.0, 672.0]
+ 
+#Learn data from 3_1
+ one_run = C_star(parameters = parameters_3_1)
+ euclidean_distance = abs(dist(rbind(one_run,data_M_3_1)))
+
+#Learn data from 3_2
+ one_run = C_star(parameters = parameters_3_2)
+ euclidean_distance = abs(dist(rbind(one_run,data_M_3_2)))+euclidean_distance
+
+#Learn data from 6_1
+ one_run = C_star(parameters = parameters_6_1)
+ euclidean_distance = abs(dist(rbind(one_run,data_M_6_1)))+euclidean_distance
+ 
+#Learn data from 6_2
+ one_run = C_star(parameters = parameters_6_2)
+ euclidean_distance = abs(dist(rbind(one_run,data_M_6_2)))+euclidean_distance
+ 
+ 
+# parameters <- c(C = trial_C, d = trial_d, g=trial_g,r=trial_r); #For C code
+# one_run = deterministic_run(precision,initial_contamination,parameters)#
+
 
 # Now we find the Euclidean distance between the simulated output and the
 # experimental results. delta is the threshold that the Euclidean distance
 # must be less than for us to accept the trial parameters into our sample.
-delta = 5000#dictates distance
-euclidean_distance = abs(dist(rbind(one_run,experimental_data)))#Distance(one_run, experimental_data,s)# #Distance(one_run, experimental_data,s)#_noP2)
+delta = 32000#dictates distance
+
+
+#Distance(one_run, experimental_data,s)# #Distance(one_run, experimental_data,s)#_noP2)
 #print(euclidean_distance)# print(parameter_sample,euclidean_distance)
 #print(total_trials)
 
 if (euclidean_distance < delta){
   #parameter_sample = parameter_sample[!is.na(parameter_sample)];
-  parameter_sample=rbind(parameter_sample, c(trial_E,trial_l))
+  parameter_sample=rbind(parameter_sample, c(trial_E,trial_l_3_1,trial_l_3_2,trial_l_6_1,trial_l_6_1))
   distances=rbind(distances,euclidean_distance)
   accepted_trials=accepted_trials+1.0
    print(paste0("Trial number accepted: ",accepted_trials))
@@ -232,10 +322,9 @@ if (euclidean_distance < delta){
 
 }
   
-# parameter_sample<-cbind(parameter_sample,distances)
 parameter_sample<-parameter_sample[order(distances), ]
 parameter_sample<-parameter_sample%>%as.data.frame()#%>%set_colnames(c("r", "C", "d","g","l"))
-colnames(parameter_sample)<-c("E", "l")
+colnames(parameter_sample)<-c("E", "l_3_1","l_3_2","l_6_1","l_6_2")
 # return(parameter_sample)
 print(paste("Summary of distances: ",distances %>% summary()))
 print(paste("Percentage of accepted trials: ",accepted_trials/total_trials*100))
@@ -255,7 +344,7 @@ return(parameter_sample)
 #2 %>% purrr::rerun()
 # Run in parallel
 require(future)
-plan(multisession, workers = 1)
+plan(multisession, workers = 6)
 # temp.list<-lapply(X = 1:4,FUN = simulate_function)
 
 RNGkind("L'Ecuyer-CMRG")
@@ -267,7 +356,6 @@ temp.list<-furrr::future_map(.x = 1:6,.f = simulate_function)
 plan(sequential)
 
 
-temp.list
 
 temp.list %>%
   bind_rows() %>% 
@@ -278,99 +366,33 @@ write.csv(parameter_sample,"../Data/parameter_sample.csv",row.names = FALSE)
 
 ```
 
-# Extract distances and parameter samples - Parallel
-```{r extract parameter samples}
-# lapply(temp.list, function(x) x[(names(x) %in% c("r", "C","d","g"))])->tst
-# pp %>% purrr::pluck(1)
 
-temp.list %>%
-  bind_rows() %>% 
-  # select(parameter_sample) %>% 
-  drop_na() %>% 
-  pivot_longer(c(r,C,d,g)) %>% 
+
+# Plots - Serial
+
+```{r parameter sample plots}
+parameter_sample %>% 
+  pivot_longer(c(E,l),names_to="Parameter") %>% 
+
+# df_tidy<-gather(parameter_sample[,-5], Parameter, value)
+ggplot(aes(x=value))+
+  geom_histogram(fill="#69b3a2",bins = 20,colour="gray")+
+  ggpubr::theme_pubclean()+
+  facet_wrap(~Parameter,ncol = 2,scales = "free")
+
+parameter_sample %>% 
   ggplot()+
-  geom_histogram(aes(x=value,fill=name))+
-  facet_wrap(~name,scales="free")+
-  hrbrthemes::theme_ipsum()
+  geom_point(aes(x=E,y=l),alpha=0.2)
 
-
-
-
-
-```
-
-
-# Plots
-
-```{r}
-tmax = 24
-time_space = seq(0, tmax, length.out = precision+1)
-
-sim1<-ode(initial_contamination, time_space, ode_model, parameter_sample[1,], method = "radau",atol = 1e-4, rtol = 1e-4)
-sim2<-ode(initial_contamination, time_space, ode_model, parameter_sample[2,], method = "radau",atol = 1e-4, rtol = 1e-4)
-sim3<-ode(initial_contamination, time_space, ode_model, parameter_sample[3,], method = "radau",atol = 1e-4, rtol = 1e-4)
-sim4<-ode(initial_contamination, time_space, ode_model, parameter_sample[4,], method = "radau",atol = 1e-4, rtol = 1e-4)
-sim<-rbind(sim1[,c(1,2)],sim2[,c(1,2)],sim3[,c(1,2)],sim4[,c(1,2)])%>%as.data.frame()
-sim$CurveNum<-rep(1:4,each=nrow(sim1))
-#lines(sim,col="blue")
-sim<-sim%>%as.data.frame()%>%set_colnames(c("Time","Contamination","CurveNum"))
-df<- read_csv("~/Downloads/Surface Cleaning/Data/cleaningExptBeth.csv")#data.frame(Time=c(0,1,2,4,8,24),Contamination=c(initial_contamination,experimental_data))
-df<-df[,-2]%>%set_colnames(c("Contamination","CleaningType","Time","Replica"))
-df$CleaningType<-factor(df$CleaningType, levels = c("Control","Alcohol","Detergent", "Distilled Water"))
-
-ggplot(subset(df,CleaningType=="Alcohol"), aes(Time, Contamination,)) + 
-  geom_point(color="#008080") +
-  #stat_summary(fun.data = "mean_cl_boot", size = 0.5,position = position_dodge(width=0.75))+
-  geom_line(data = sim,aes(color=as.factor(CurveNum)),size=1.1)+ #"#008080"
-  scale_y_continuous(name  = "S. aureus colonies")+ #trans = "log10",
-  labs(color='Trial curve')+# +scale_color_discrete(name = "Trial curve")+  
-  theme_pubclean()
-
-
-#Just the experiemntal curves
-ggplot(subset(df), aes(x=Time, y=Contamination/(4.5^2*pi), colour=CleaningType)) +
-  geom_point(alpha=0.2,color="black")+
-  stat_summary(fun.data = "mean_cl_boot", size = 0.5,position = position_dodge(width=0.75))+
-  scale_y_continuous(name  = "CFU/cm^2")+ #trans = "log10",
-  scale_x_continuous(name  = "Time(h) after cleaning")+ #trans = "log10",
-  scale_color_brewer(palette = "Set1",name="Care Type")+
-  labs(color='Cleaning Method')+# +scale_color_discrete(name = "Trial curve")+
-  facet_wrap(~CleaningType,nrow = 3)+
-  theme_pubr()
   
-
- #ggsave(filename = 'Alcohol.pdf')
- #write.csv(parameter_sample,"parameter_sample_Alcohol_500.csv",row.names = FALSE)
- # This will save a 400x400 file at 100 ppi
- #ggsave("plot.png", width=4, height=4, dpi=100)
-# 
-# ggplot(melt(parameter_sample),aes(x=value,))+
-#   geom_histogram(color="black", fill="white")+
-#   facet_wrap(~variable,ncol=2,scales = "free")+
-#   theme_pubclean()
-
-#Matrix Plot
-#ppi <- 600
-#png("hist_Alcohol.png", width=6*ppi, height=6*ppi, res=ppi)
-#hist(parameter_sample[,-5], pch=20 , cex=1.5 , col="#69b3a220")
-df_tidy<-gather(parameter_sample[,-5], Parameter, value)
-ggplot(df_tidy,aes(x=value))+
-  geom_histogram(fill="#69b3a2",bins = 15)+
-  theme_pubclean()+
-  facet_wrap(~Parameter,nrow = 2,scales = "free")
-#dev.off()
-png("matrix_Alcohol.png", width=6*ppi, height=6*ppi, res=ppi)
-plot(parameter_sample[,-5] , pch=20 , cex=1.5 , col="#69b3a220")
-dev.off()
 ```
 
+```{r Trajectory plots}
+E_m=mean(parameter_sample$E,na.rm=TRUE)
+l_m=mean(parameter_sample$l,na.rm=TRUE)
+C_star(parameters = c(E_m,l_m))[1]
 
 
 
-
-
-
-
-
-
+```
 
