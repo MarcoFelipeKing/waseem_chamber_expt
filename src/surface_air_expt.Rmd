@@ -76,8 +76,6 @@ expt_data %>%
 
 ```{r investigatory plots}
 
-
-
 df %>% 
   ggplot()+
   geom_point(aes(x=air,y=surface,colour=position))+
@@ -108,11 +106,12 @@ df %>%
   b
 ggpubr::ggarrange(a,b,nrow = 2)
 
+b
 
 
 ```
 
-```{r}
+```{r surface concentration}
 
 df %>% 
   ggplot()+
@@ -137,7 +136,7 @@ df %>%
 
 $$\dfrac{d C}{d t}=\dfrac{E}{V}-\lambda C$$
 
-where $\lambda=\lambda_i+\lambda_d+\lambda_v $, which is a combination of inactivation (which includes efficiency of sampling), deposition and removal by ventilation.
+where $\lambda=\lambda_i+\lambda_d+\lambda_v $, which is a combination of inactivation (which includes efficiency of sampling), deposition and removal by ventilation. $E$ is particles per s
 
 Steady state $$ C=-\dfrac{E}{V\lambda}$$. Need to know E with some more certainty. 
 
@@ -154,12 +153,12 @@ $$ C(t)=\dfrac{E}{V}(1-e^{-(\lambda_i+\lambda_d+\lambda_v) t})+ C_0 e^{-(\lambda
 ```{r Distance function}
 
 Distance<-function(x,y,s){  # computes the Euclidean distance between two lists of the same length
-  if (length(x) == length(y)){
+  # if (length(x) == length(y)){
      #sqrt(sum((x-y)/(s))^2) #sqrt is slow
-    (sum((x-y)/(s)))^2 #This is faster than abs(dist(rbind(x/s,y/s))) by 1 order of magnitude
-  }
-  else{
-    print( 'vectors are not the same length')}
+    return((sum((x-y)/(s)))^2) #This is faster than abs(dist(rbind(x/s,y/s))) by 1 order of magnitude
+  # }
+  # else{
+  # print( 'vectors are not the same length')}
 }
 
 ```
@@ -168,16 +167,6 @@ Distance<-function(x,y,s){  # computes the Euclidean distance between two lists 
 ## ODE solver function
 
 ```{r ODE function}
-# ode_model <- function(times, initial_contamination, parameters){
-#   with(
-#     as.list(c(initial_contamination, parameters)),{
-#       # dContamination <- Contamination*r*(1-Contamination/C)-d*exp(-g*times)*Contamination
-#       dContamination <- (1-Contamination/C)*r-d*exp(-g*times)*Contamination
-#       return(list(dContamination))
-#     }
-#   )
-# }
-
 ode_model<- function(t, y, parameters){
   with(
     as.list(c(y, parameters)),{
@@ -196,23 +185,14 @@ ode_model<- function(t, y, parameters){
 deterministic_run<-function(precision,initial_contamination,parameters){
   tmax = 3
   times = seq(0, tmax, length.out = precision) #precision+1
-
-#sim=odeint(ode_model,initial_contamination,times,args=(r,C,d,g,l))
-#parameters=c(r,C,d,g,l)
+  
 sim<- ode(initial_contamination, times, ode_model, parameters, method = "radau",atol = 1e-4, rtol = 1e-4)
-# num_at_0=sim[int(precision*0.1/50.0)]
-# num_at_1=sim[(precision*65/tmax/60),2]
 num_at_2=sim[(precision*80/tmax/60),2]
 num_at_4=sim[(precision*95/tmax/60),2]
 num_at_6=sim[(precision*110/tmax/60),2]
 num_at_16=sim[(precision*125/tmax/60),2]
-# num_at_18=sim[(precision*18/tmax),2]
-# num_at_20=sim[(precision*20/tmax),2]
-# num_at_22=sim[(precision*22/tmax),2]
-# num_at_24=sim[(precision*24/tmax),2]
 
 return(cbind(num_at_2,num_at_4,num_at_6,num_at_16))
-# return(cbind(num_at_2,num_at_4,num_at_6,num_at_16,num_at_18,num_at_20,num_at_22,num_at_24))
 }
 ```
 
@@ -231,16 +211,11 @@ C_star <- function(parameters){
 ```
 
 # Parallel version - Non-C
+
 This is the parallel implementation usingg the furrrr framework with 4 worker cores
 ```{r parallel implementation with furrr}
 ##################################################################################################################
 ## Applying the ABC rejection algorithm
-
-# library(foreach)
-# library(doParallel)
-# cores=detectCores()
-# cl <- makeCluster(cores[1]-1) #not to overload your computer
-# registerDoParallel(cl)
 
 simulate_function<-function(a){
   # set.seed(seed = TRUE)
@@ -261,11 +236,11 @@ while (NROW(parameter_sample) <= sample_size){
   
   # The prior distributions we use are d ~ U(0.001,10.0), C ~ U(200,1200), r ~ U(0.001,1.0), g ~ U(0.001,1.0). 
   # We begin by sampling from these distributions and simulating the process
-trial_E = runif(1,1E2,1e3)
-trial_l_3_1 = runif(1,0.1,3e1)
-trial_l_3_2 = runif(1,0.1,3e1)
-trial_l_6_1 = runif(1,0.1,3e1)
-trial_l_6_2 = runif(1,0.1,3e1)
+trial_E = runif(1,1E2,1e3) #E= 10^5 cfu/ml * 0.22 ml/min
+trial_l_3_1 = runif(1,1e-3,1e-1)
+trial_l_3_2 = runif(1,1e-3,1e-1)
+trial_l_6_1 = runif(1,1e-3,1e-1)
+trial_l_6_2 = runif(1,1e-3,1e-1)
 total_trials=total_trials+1.0
 #print(total_trials)
 parameters_3_1=c(E=trial_E,
@@ -302,7 +277,7 @@ parameters_6_2=c(E=trial_E,
 # Now we find the Euclidean distance between the simulated output and the
 # experimental results. delta is the threshold that the Euclidean distance
 # must be less than for us to accept the trial parameters into our sample.
-delta = 32000#dictates distance
+delta = 10000#dictates distance
 
 
 #Distance(one_run, experimental_data,s)# #Distance(one_run, experimental_data,s)#_noP2)
@@ -349,7 +324,7 @@ plan(multisession, workers = 6)
 
 RNGkind("L'Ecuyer-CMRG")
 set.seed(42)
-seeds <- list(.Random.seed)
+# seeds <- list(.Random.seed)
 temp.list<-furrr::future_map(.x = 1:6,.f = simulate_function)
 
 # Reset to running sequentially
@@ -359,10 +334,9 @@ plan(sequential)
 
 temp.list %>%
   bind_rows() %>% 
-  # select(parameter_sample) %>% 
   drop_na() %>% 
   unnest()  ->parameter_sample
-write.csv(parameter_sample,"../Data/parameter_sample.csv",row.names = FALSE)
+write.csv(parameter_sample,"../Data/parameter_sample_air.csv",row.names = FALSE)
 
 ```
 
@@ -372,17 +346,17 @@ write.csv(parameter_sample,"../Data/parameter_sample.csv",row.names = FALSE)
 
 ```{r parameter sample plots}
 parameter_sample %>% 
-  pivot_longer(c(E,l),names_to="Parameter") %>% 
+  pivot_longer(c(E,l_3_1,l_3_2,l_6_1,l_6_2),names_to="Parameter") %>% 
+  filter(Parameter!="E") %>% 
 
 # df_tidy<-gather(parameter_sample[,-5], Parameter, value)
 ggplot(aes(x=value))+
   geom_histogram(fill="#69b3a2",bins = 20,colour="gray")+
   ggpubr::theme_pubclean()+
+  scale_x_continuous(limits = c(0,2))+
   facet_wrap(~Parameter,ncol = 2,scales = "free")
 
-parameter_sample %>% 
-  ggplot()+
-  geom_point(aes(x=E,y=l),alpha=0.2)
+parameter_sample 
 
   
 ```
@@ -392,7 +366,11 @@ E_m=mean(parameter_sample$E,na.rm=TRUE)
 l_m=mean(parameter_sample$l,na.rm=TRUE)
 C_star(parameters = c(E_m,l_m))[1]
 
+parameter_sample %>% 
+  summary()
 
-
+```
+```{r}
+951.4/(32.25*0.1)
 ```
 
