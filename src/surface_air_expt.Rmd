@@ -48,11 +48,11 @@ expt_data %>%
   pull(S) ->data_S_3_1
 
 expt_data %>% 
-  filter(ach==6& position==1) %>% 
+  filter(ach==6 & position==1) %>% 
   pull(M) ->data_M_6_1
 
 expt_data %>% 
-  filter(ach==6& position==1) %>% 
+  filter(ach==6 & position==1) %>% 
   pull(S) ->data_S_6_1
 
 expt_data %>% 
@@ -236,11 +236,11 @@ while (NROW(parameter_sample) <= sample_size){
   
   # The prior distributions we use are d ~ U(0.001,10.0), C ~ U(200,1200), r ~ U(0.001,1.0), g ~ U(0.001,1.0). 
   # We begin by sampling from these distributions and simulating the process
-trial_E = runif(1,1E2,1e3) #E= 10^5 cfu/ml * 0.22 ml/min
-trial_l_3_1 = runif(1,1e-3,1e-1)
-trial_l_3_2 = runif(1,1e-3,1e-1)
-trial_l_6_1 = runif(1,1e-3,1e-1)
-trial_l_6_2 = runif(1,1e-3,1e-1)
+trial_E = runif(1,1E2,8e2) #E= 10^5 cfu/ml * 0.22 ml/min
+trial_l_3_1 = runif(1,1e-5,1e-1)
+trial_l_3_2 = runif(1,1e-5,1e-1)
+trial_l_6_1 = runif(1,1e-5,1e-1)
+trial_l_6_2 = runif(1,1e-5,1e-1)
 total_trials=total_trials+1.0
 #print(total_trials)
 parameters_3_1=c(E=trial_E,
@@ -353,7 +353,7 @@ parameter_sample %>%
 ggplot(aes(x=value))+
   geom_histogram(fill="#69b3a2",bins = 20,colour="gray")+
   ggpubr::theme_pubclean()+
-  scale_x_continuous(limits = c(0,2))+
+  scale_x_continuous(limits = c(0,2e-2))+
   facet_wrap(~Parameter,ncol = 2,scales = "free")
 
 parameter_sample 
